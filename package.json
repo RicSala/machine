@@ -1,5 +1,5 @@
 {
-  "name": "@your-namespace/state-machine",
+  "name": "tiny-machine",
   "version": "0.1.0",
   "description": "A TypeScript implementation of finite state machines",
   "main": "dist/index.js",
