@@ -5,7 +5,8 @@ import {
   ActorRef,
   StateValue,
   Snapshot,
-  ActorScope,
+  ActionExecutor,
+  TransitionResult,
 } from './types';
 
 /**
@@ -15,18 +16,15 @@ import {
  * - Manages subscriptions and notifications
  * - Makes sure events are processed in order
  */
-
 export class Actor<TContext extends MachineContext, TEvent extends EventObject>
   implements ActorRef<TContext, TEvent>
 {
   public readonly id: string;
+  private snapshot: Snapshot<TContext, StateValue>;
   private machine: StateMachine<TContext, TEvent>;
-  private currentState: StateValue;
-  private context: TContext;
   private subscribers: Set<(snapshot: Snapshot<TContext, StateValue>) => void>;
-  private lastSnapshot: Snapshot<TContext, StateValue> | null = null;
-  private status: 'active' | 'done' | 'error' | 'stopped' = 'active';
   private deferredQueue: Array<() => void> = [];
+  private lastSnapshot: Snapshot<TContext, StateValue> | null = null;
 
   constructor(
     machine: StateMachine<TContext, TEvent>,
@@ -34,22 +32,20 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
   ) {
     this.id = id;
     this.machine = machine;
-    this.currentState = machine.getInitialState();
-    this.context = machine.getInitialContext();
+    this.snapshot = machine.getInitialSnapshot();
     this.subscribers = new Set();
   }
 
   getSnapshot = (): Snapshot<TContext, StateValue> => {
-    // If we have a cached snapshot and nothing has changed, return it
     if (this.lastSnapshot !== null) {
       return this.lastSnapshot;
     }
 
     // Create new snapshot only when needed
     this.lastSnapshot = {
-      value: this.currentState,
-      context: { ...this.context },
-      status: this.status,
+      value: this.snapshot.value,
+      context: { ...this.snapshot.context },
+      status: this.snapshot.status,
     };
 
     return this.lastSnapshot;
@@ -58,7 +54,10 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
   private notify(): void {
     if (this.subscribers.size === 0) return;
 
-    // Get the snapshot (which might be cached)
+    // Invalidate cache before notifying subscribers
+    this.lastSnapshot = null;
+
+    // Get the snapshot (which will create a new one)
     const snapshot = this.getSnapshot();
 
     this.subscribers.forEach((subscriber) => {
@@ -101,30 +100,36 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
       this.subscribers.delete(callback);
     };
   };
+
   send = (event: TEvent): void => {
-    if (this.status !== 'active') {
+    if (this.snapshot.status !== 'active') {
       if (process.env.NODE_ENV === 'development') {
         console.warn(
-          `Event "${event.type}" was sent to stopped actor "${this.id}". This actor has already reached its final state, and will not transition.`
+          `Event "${event.type}" was sent to stopped actor "${this.id}"`
         );
       }
       return;
     }
 
-    const actorScope: ActorScope<TContext, TEvent> = {
-      self: this,
-      id: this.id,
-    };
-
     try {
-      const { state: newState, context: newContext } = this.machine.transition(
-        this.currentState,
-        this.context,
-        event,
-        actorScope
-      );
+      // Get next state and actions (pure computation)
+      const result: TransitionResult<TContext, StateValue> =
+        this.machine.transition(this.snapshot, event);
 
-      // Process all queued events in order
+      // Execute actions and update context
+      const newContext = this.executeActions(result.actions, event);
+
+      // Invalidate cache before updating snapshot
+      this.lastSnapshot = null;
+
+      // Update snapshot
+      const nextSnapshot: Snapshot<TContext, StateValue> = {
+        status: this.snapshot.status,
+        value: result.value,
+        context: newContext,
+      };
+
+      // Process deferred actions
       while (this.deferredQueue.length > 0) {
         const fn = this.deferredQueue.shift();
         try {
@@ -134,49 +139,79 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
         }
       }
 
-      const hasChanged =
-        newState !== this.currentState ||
-        !this.isEqual(newContext, this.context);
-
-      this.currentState = newState;
-      this.context = newContext;
-
-      if (hasChanged) {
-        this.lastSnapshot = null;
-        this.notify();
-      }
+      // Update state and notify
+      this.snapshot = nextSnapshot;
+      this.notify();
     } catch (error) {
       this.handleError(error);
     }
   };
 
   matches = (stateValue: StateValue): boolean => {
-    return this.currentState === stateValue;
+    return this.snapshot.value === stateValue;
   };
 
   can = (event: TEvent): boolean => {
-    return this.machine.can(this.currentState, event, this.context);
+    return this.machine.can(this.snapshot.value, event, this.snapshot.context);
   };
 
   start = (): void => {
-    if (this.status !== 'active') {
-      this.status = 'active';
+    if (this.snapshot.status !== 'active') {
+      // Invalidate cache before updating status
       this.lastSnapshot = null;
+
+      this.snapshot = {
+        ...this.snapshot,
+        status: 'active',
+      };
       this.notify();
     }
   };
 
   stop = (): void => {
-    if (this.status !== 'stopped') {
-      this.status = 'stopped';
+    if (this.snapshot.status !== 'stopped') {
+      // Invalidate cache before updating status
       this.lastSnapshot = null;
+
+      this.snapshot = {
+        ...this.snapshot,
+        status: 'stopped',
+      };
       this.notify();
     }
   };
 
+  private executeActions(
+    actions: ActionExecutor<TContext, TEvent>[],
+    event: TEvent
+  ): TContext {
+    let context = { ...this.snapshot.context };
+
+    actions.forEach((action) => {
+      if (action.type === 'xstate.assign') {
+        const updates = action.exec({
+          context,
+          event,
+          self: this,
+        });
+        context = { ...context, ...updates };
+      } else {
+        action.exec({
+          context,
+          event,
+          self: this,
+        });
+      }
+    });
+
+    return context;
+  }
+
   private handleError = (error: unknown): void => {
-    this.status = 'error';
-    this.lastSnapshot = null;
+    this.snapshot = {
+      ...this.snapshot,
+      status: 'error',
+    };
     this.notify();
   };
 }

@@ -8,5 +8,4 @@ export type {
   Action,
   ActorRef,
   Snapshot,
-  ActorScope,
 } from './types';

@@ -2,20 +2,20 @@ export type StateValue = string;
 export type EventObject = { type: string; [key: string]: any };
 export type MachineContext = Record<string, any>;
 
-export type Guard<TContext, TEvent> = {
+export interface Guard<TContext, TEvent> {
   type: string;
   condition: (context: TContext, event: TEvent) => boolean;
-};
-
-export interface Action<TContext, TEvent extends EventObject> {
-  type: string;
-  exec: (args: ActionArgs<TContext, TEvent>) => void;
 }
 
 export interface ActionArgs<TContext, TEvent extends EventObject> {
   context: TContext;
   event: TEvent;
   self: ActorRef<TContext, TEvent>;
+}
+
+export interface Action<TContext, TEvent extends EventObject> {
+  type: string;
+  exec: (args: ActionArgs<TContext, TEvent>) => void | Record<string, any>;
 }
 
 export interface TransitionConfig<TContext, TEvent extends EventObject> {
@@ -45,16 +45,12 @@ export interface MachineConfig<TContext, TEvent extends EventObject> {
   };
 }
 
-export type MachineContext = Record<string, any>;
-
-// Add a simple Snapshot type
 export interface Snapshot<TContext, TState> {
-  value: TState; // XState uses 'value' instead of 'state'
+  value: TState;
   context: TContext;
   status: 'active' | 'done' | 'error' | 'stopped';
 }
 
-// Modify ActorRef to be simpler than XState but follow similar pattern
 export interface ActorRef<TContext, TEvent extends EventObject> {
   id: string;
   send: (event: TEvent) => void;
@@ -68,12 +64,12 @@ export interface ActorRef<TContext, TEvent extends EventObject> {
   can: (event: TEvent) => boolean;
 }
 
-// Modify ActorScope to remove circular reference
-export interface ActorScope<TContext, TEvent extends EventObject> {
-  self: ActorRef<TContext, TEvent>; // Use ActorRef instead of Actor
-  id: string;
+export interface ActionExecutor<TContext, TEvent extends EventObject> {
+  type: string;
+  exec: (args: ActionArgs<TContext, TEvent>) => void | Record<string, any>;
 }
 
-export interface Guard<TContext, TEvent extends EventObject> {
-  condition: (context: TContext, event: TEvent) => boolean;
+export interface TransitionResult<TContext, TStateValue> {
+  value: TStateValue;
+  actions: Array<ActionExecutor<TContext, any>>;
 }

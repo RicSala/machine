@@ -145,13 +145,17 @@ describe('StateMachine', () => {
           entry: [
             {
               type: 'logEntry',
-              exec: () => sideEffects.push('entered idle'),
+              exec: () => {
+                sideEffects.push('entered idle');
+              },
             },
           ],
           exit: [
             {
               type: 'logExit',
-              exec: () => sideEffects.push('exited idle'),
+              exec: () => {
+                sideEffects.push('exited idle');
+              },
             },
           ],
           on: {
@@ -164,7 +168,9 @@ describe('StateMachine', () => {
           entry: [
             {
               type: 'logEntry',
-              exec: () => sideEffects.push('entered active'),
+              exec: () => {
+                sideEffects.push('entered active');
+              },
             },
           ],
         },

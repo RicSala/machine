@@ -1,18 +1,17 @@
+import { ActionExecutor, TransitionResult } from './types';
+
 import { Actor } from './Actor';
 import {
   MachineContext,
   EventObject,
   MachineConfig,
   StateValue,
-  TransitionConfig,
-  ActorScope,
-  Action,
+  Snapshot,
 } from './types';
 /**
  * Responsibilities:
  * - Defined the machine configuration
  * - Define the process of transitioning from one state to another
- * -
  */
 export class StateMachine<
   TContext extends MachineContext,
@@ -36,7 +35,7 @@ export class StateMachine<
 
       actions.forEach((action) => {
         action.exec({
-          context: actor['context'],
+          context: actor.getSnapshot().context,
           event: { type: '$$init' } as TEvent,
           self: actor,
         });
@@ -46,21 +45,12 @@ export class StateMachine<
     return actor;
   }
 
-  getTransition(
-    state: StateValue,
-    event: TEvent
-  ): TransitionConfig<TContext, TEvent> | undefined {
-    // First check state-specific transitions
+  getTransition(state: StateValue, event: TEvent) {
     const stateNode = this.config.states[state];
-    const stateTransition =
-      stateNode?.on?.[event.type as keyof typeof stateNode.on];
-
-    if (stateTransition) {
-      return stateTransition;
-    }
-
-    // If no state-specific transition found, check global transitions
-    return this.config.on?.[event.type as keyof typeof this.config.on];
+    return (
+      stateNode?.on?.[event.type as keyof typeof stateNode.on] ||
+      this.config.on?.[event.type as keyof typeof this.config.on]
+    );
   }
 
   can(state: StateValue, event: TEvent, context: TContext): boolean {
@@ -73,88 +63,65 @@ export class StateMachine<
     );
   }
 
-  getInitialState(): StateValue {
-    return this.config.initial;
-  }
-
-  getInitialContext(): TContext {
-    return { ...this.config.context };
+  getInitialSnapshot(): Snapshot<TContext, StateValue> {
+    return {
+      status: 'active',
+      context: { ...this.config.context },
+      value: this.config.initial,
+    };
   }
 
   transition(
-    state: StateValue,
-    context: TContext,
-    event: TEvent,
-    actorScope: ActorScope<TContext, TEvent>
-  ): { state: StateValue; context: TContext } {
-    const transition = this.getTransition(state, event);
-    if (!transition) return { state, context };
+    snapshot: Snapshot<TContext, StateValue>,
+    event: TEvent
+  ): TransitionResult<TContext, StateValue> {
+    const currentState = snapshot.value;
+    const transition = this.getTransition(currentState, event);
 
-    if (!this.can(state, event, context)) {
-      return { state, context };
+    if (!transition || !this.can(currentState, event, snapshot.context)) {
+      return {
+        value: currentState,
+        actions: [],
+      };
     }
 
-    const newContext = { ...context };
-    const targetState = transition.target || state;
+    const targetState = transition.target || currentState;
+    const actions: ActionExecutor<TContext, TEvent>[] = [];
+    let updatedContext = { ...snapshot.context };
 
-    // Helper function to execute actions with proper assign handling
-    const executeActions = (actions: Action<TContext, TEvent>[]) => {
-      actions.forEach((action) => {
-        if (action.type === 'xstate.assign') {
-          // Handle assign action specially
-          const updates = action.exec({
-            context: newContext,
-            event,
-            self: actorScope.self,
-          });
-          Object.assign(newContext, updates);
-        } else {
-          // Handle other actions normally
-          action.exec({
-            context: newContext,
-            event,
-            self: actorScope.self,
-          });
-        }
-      });
-    };
-
-    // handle exit effects of the current state if state changed
-    if (targetState !== state) {
-      const currentStateNode = this.config.states[state];
-      const exitActions = currentStateNode?.exit;
-
-      if (exitActions) {
-        executeActions(
-          Array.isArray(exitActions) ? exitActions : [exitActions]
-        );
+    // Collect exit actions
+    if (targetState !== currentState) {
+      const currentStateNode = this.config.states[currentState];
+      if (currentStateNode?.exit) {
+        const exitActions = Array.isArray(currentStateNode.exit)
+          ? currentStateNode.exit
+          : [currentStateNode.exit];
+        actions.push(...exitActions);
       }
     }
 
-    // Execute transition actions
+    // Collect transition actions
     if (transition.actions) {
-      executeActions(
-        Array.isArray(transition.actions)
-          ? transition.actions
-          : [transition.actions]
-      );
+      const transitionActions = Array.isArray(transition.actions)
+        ? transition.actions
+        : [transition.actions];
+      actions.push(...transitionActions);
     }
 
-    // Handle entry effects of the target state if state changed
-    if (targetState !== state) {
+    // Collect entry actions
+    if (targetState !== currentState) {
       const targetStateNode = this.config.states[targetState];
-      const entryActions = targetStateNode?.entry;
-
-      if (entryActions) {
-        executeActions(
-          Array.isArray(entryActions) ? entryActions : [entryActions]
-        );
+      if (targetStateNode?.entry) {
+        const entryActions = Array.isArray(targetStateNode.entry)
+          ? targetStateNode.entry
+          : [targetStateNode.entry];
+        actions.push(...entryActions);
       }
     }
 
     return {
-      state: targetState,
-      context: newContext,
+      value: targetState,
+      actions,
     };
   }
 }
