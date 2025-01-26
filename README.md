@@ -16,19 +16,19 @@ While XState is an incredibly powerful state management solution, its extensive 
 
 ````bash
 # Using pnpm (recommended)
-pnpm add @your-namespace/state-machine
+pnpm add @tinystack/machine
 
 # Using npm
-npm install @your-namespace/state-machine
+npm install @tinystack/machine
 
 # Using yarn
-yarn add @your-namespace/state-machine
+yarn add @tinystack/machine
 
 
 # Basic Usage
 
 ```javascript
-import { StateMachine, assign } from '@your-namespace/state-machine';
+import { StateMachine, assign } from '@tinystack/machine';
 
 // Define your machine
 const toggleMachine = new StateMachine({
