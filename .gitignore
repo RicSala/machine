@@ -4,3 +4,8 @@ dist
 pnpm-lock.yaml
 coverage
 .env
+
+# excalidraw
+.excalidraw
+
+.cursor

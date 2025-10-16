@@ -1,6 +1,6 @@
 {
-  "name": "tiny-machine",
-  "version": "0.1.2",
+  "name": "@tinystack/machine",
+  "version": "0.1.0",
   "description": "A TypeScript implementation of finite state machines",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "test": "vitest run",
+    "test:ui": "vitest --ui",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -23,8 +24,9 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "typescript": "^5.3.3",
+    "@vitest/ui": "^3.2.4",
     "tsup": "^8.0.1",
-    "vitest": "^1.2.0"
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.2"
   }
 }
