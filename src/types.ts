@@ -70,14 +70,12 @@ export interface MachineConfig<
   TStateValue extends string
 > {
   id: string;
-  initial: TStateValue;
+  initial: NoInfer<TStateValue>;
   context: TContext;
   on?: {
     [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TStateValue>;
   };
-  states: {
-    [K in TStateValue]: StateNodeConfig<TContext, TEvent, TStateValue>;
-  };
+  states: Record<TStateValue, StateNodeConfig<TContext, TEvent, TStateValue>>;
 }
 
 export interface Snapshot<

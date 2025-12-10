@@ -1,10 +1,4 @@
-import {
-  Action,
-  StateNodeConfig,
-  TransitionConfig,
-  TransitionResult,
-  NoInfer,
-} from './types';
+import { Action, TransitionResult } from './types';
 
 import { MachineContext, EventObject, MachineConfig, Snapshot } from './types';
 
@@ -113,15 +107,9 @@ export function setup<
   TEvent extends EventObject
 >(_options: { types: { context?: TContext; events?: TEvent } }) {
   return {
-    createMachine<TState extends string>(config: {
-      id: string;
-      context: TContext;
-      initial: NoInfer<TState>;
-      on?: {
-        [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TState>;
-      };
-      states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
-    }) {
+    createMachine<TState extends string>(
+      config: MachineConfig<TContext, TEvent, TState>
+    ) {
       return new StateMachine(
         config as MachineConfig<TContext, TEvent, TState>
       );
