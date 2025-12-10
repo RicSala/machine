@@ -15,19 +15,15 @@ interface TestEvents extends EventObject {
 type TestState = 'active';
 
 const createTestMachine = () => {
-  const incrementAction = assign<TestContext, TestEvents, TestState>(
-    (context) => ({
-      count: context.count + 1,
-    })
-  );
+  const incrementAction = assign<TestContext, TestEvents>((context) => ({
+    count: context.count + 1,
+  }));
 
-  const decrementAction = assign<TestContext, TestEvents, TestState>(
-    (context) => ({
-      count: context.count - 1,
-    })
-  );
+  const decrementAction = assign<TestContext, TestEvents>((context) => ({
+    count: context.count - 1,
+  }));
 
-  const resetAction = assign<TestContext, TestEvents, TestState>(() => ({
+  const resetAction = assign<TestContext, TestEvents>(() => ({
     count: 0,
   }));
 

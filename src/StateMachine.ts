@@ -115,8 +115,67 @@ export const createMachine = <
     'states' | 'initial'
   > & {
     states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
-    initial: NoInfer<TState>;  // Validated against TState, but doesn't participate in inference
+    initial: NoInfer<TState>;
   }
 ): StateMachine<TContext, TEvent, TState> => {
   return new StateMachine(config as MachineConfig<TContext, TEvent, TState>);
+};
+
+interface SetupTypes<
+  TContext extends MachineContext,
+  TEvent extends EventObject
+> {
+  context?: TContext;
+  events?: TEvent;
+}
+
+interface SetupResult<
+  TContext extends MachineContext,
+  TEvent extends EventObject
+> {
+  createMachine: <TState extends string>(config: {
+    id: string;
+    context: TContext;
+    initial: NoInfer<TState>;
+    on?: {
+      [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TState>;
+    };
+    states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
+  }) => StateMachine<TContext, TEvent, TState>;
+
+  assign: (
+    assignment: (context: TContext, event: TEvent) => Partial<TContext>
+  ) => Action<TContext, TEvent, any>;
+}
+
+export const setup = <
+  TContext extends MachineContext,
+  TEvent extends EventObject
+>(_options: {
+  types: SetupTypes<TContext, TEvent>;
+}): SetupResult<TContext, TEvent> => {
+  return {
+    createMachine: <TState extends string>(config: {
+      id: string;
+      context: TContext;
+      initial: NoInfer<TState>;
+      on?: {
+        [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TState>;
+      };
+      states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
+    }): StateMachine<TContext, TEvent, TState> => {
+      return new StateMachine(
+        config as MachineConfig<TContext, TEvent, TState>
+      );
+    },
+
+    assign: (
+      assignment: (context: TContext, event: TEvent) => Partial<TContext>
+    ): Action<TContext, TEvent, any> => {
+      return {
+        type: 'xstate.assign',
+        exec: ({ context, event }) => assignment(context, event),
+      };
+    },
+  };
 };

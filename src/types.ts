@@ -46,9 +46,9 @@ export interface TransitionConfig<
   TEvent extends EventObject,
   TStateValue extends string
 > {
-  target?: TStateValue;
+  target?: NoInfer<TStateValue>;
   guards?: Guard<TContext, TEvent>[];
-  actions?: Action<TContext, TEvent, TStateValue>[];
+  actions?: Action<TContext, TEvent, any>[];
   reenter?: boolean;
 }
 
@@ -60,8 +60,8 @@ export interface StateNodeConfig<
   on?: {
     [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TStateValue>;
   };
-  entry?: Action<TContext, TEvent, TStateValue>[];
-  exit?: Action<TContext, TEvent, TStateValue>[];
+  entry?: Action<TContext, TEvent, any>[];
+  exit?: Action<TContext, TEvent, any>[];
 }
 
 export interface MachineConfig<

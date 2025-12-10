@@ -1,4 +1,4 @@
-export { StateMachine } from './StateMachine';
+export { StateMachine, setup } from './StateMachine';
 export { Actor } from './Actor';
 export { assign } from './actions';
 export type {
