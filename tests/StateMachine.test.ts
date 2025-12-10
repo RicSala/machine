@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { StateMachine } from '../src/StateMachine';
-import type { MachineConfig, EventObject, Action } from '../src/types';
+import type { MachineConfig, EventObject } from '../src/types';
+import { Actor } from '../src/Actor';
+import { assign } from '../src/actions';
 
 interface TestContext {
   count: number;
@@ -10,23 +12,26 @@ interface TestEvents extends EventObject {
   type: 'INCREMENT' | 'DECREMENT' | 'RESET';
 }
 
+type TestState = 'active';
+
 const createTestMachine = () => {
-  const incrementAction: Action<TestContext, TestEvents> = {
-    type: 'xstate.assign',
-    exec: ({ context }) => ({ count: context.count + 1 }),
-  };
+  const incrementAction = assign<TestContext, TestEvents, TestState>(
+    (context) => ({
+      count: context.count + 1,
+    })
+  );
 
-  const decrementAction: Action<TestContext, TestEvents> = {
-    type: 'xstate.assign',
-    exec: ({ context }) => ({ count: context.count - 1 }),
-  };
+  const decrementAction = assign<TestContext, TestEvents, TestState>(
+    (context) => ({
+      count: context.count - 1,
+    })
+  );
 
-  const resetAction: Action<TestContext, TestEvents> = {
-    type: 'xstate.assign',
-    exec: () => ({ count: 0 }),
-  };
+  const resetAction = assign<TestContext, TestEvents, TestState>(() => ({
+    count: 0,
+  }));
 
-  const config: MachineConfig<TestContext, TestEvents> = {
+  const config: MachineConfig<TestContext, TestEvents, TestState> = {
     id: 'counter',
     initial: 'active',
     context: {
@@ -53,7 +58,7 @@ const createTestMachine = () => {
 };
 
 const createTestMachineWithGuards = () => {
-  const config: MachineConfig<TestContext, TestEvents> = {
+  const config: MachineConfig<TestContext, TestEvents, TestState> = {
     id: 'counter',
     initial: 'active',
     context: {
@@ -64,10 +69,9 @@ const createTestMachineWithGuards = () => {
         on: {
           INCREMENT: {
             actions: [
-              {
-                type: 'xstate.assign',
-                exec: ({ context }) => ({ count: context.count + 1 }),
-              },
+              assign((context, event) => ({
+                count: context.count + 1,
+              })),
             ],
             guards: [
               {
@@ -87,7 +91,7 @@ const createTestMachineWithGuards = () => {
 describe('StateMachine', () => {
   it('should create a machine with initial state and context', () => {
     const machine = createTestMachine();
-    const actor = machine.createActor();
+    const actor = new Actor(machine);
     const snapshot = actor.getSnapshot();
 
     expect(snapshot.value).toBe('active');
@@ -96,7 +100,7 @@ describe('StateMachine', () => {
 
   it('should handle transitions and update context', () => {
     const machine = createTestMachine();
-    const actor = machine.createActor();
+    const actor = new Actor<TestContext, TestEvents, TestState>(machine);
 
     actor.send({ type: 'INCREMENT' });
     expect(actor.getSnapshot().context.count).toBe(1);
@@ -113,7 +117,7 @@ describe('StateMachine', () => {
 
   it('should notify subscribers of state changes', () => {
     const machine = createTestMachine();
-    const actor = machine.createActor();
+    const actor = new Actor<TestContext, TestEvents, TestState>(machine);
 
     const snapshots: any[] = [];
     const unsubscribe = actor.subscribe((snapshot) => {
@@ -136,12 +140,16 @@ describe('StateMachine', () => {
   it('should handle entry and exit actions', () => {
     const sideEffects: string[] = [];
 
-    const machineWithEntryExit = new StateMachine<TestContext, TestEvents>({
+    const machineWithEntryExit = new StateMachine<
+      TestContext,
+      TestEvents,
+      TestState
+    >({
       id: 'test',
-      initial: 'idle',
+      initial: 'active',
       context: { count: 0 },
       states: {
-        idle: {
+        active: {
           entry: [
             {
               type: 'logEntry',
@@ -164,20 +172,14 @@ describe('StateMachine', () => {
             },
           },
         },
-        active: {
-          entry: [
-            {
-              type: 'logEntry',
-              exec: () => {
-                sideEffects.push('entered active');
-              },
-            },
-          ],
-        },
       },
     });
 
-    const actor = machineWithEntryExit.createActor();
+    const actor = new Actor<TestContext, TestEvents, TestState>(
+      machineWithEntryExit
+    );
+    actor.start();
+    console.log('STATUS:', actor.getSnapshot().status);
     expect(sideEffects).toEqual(['entered idle']);
 
     actor.send({ type: 'INCREMENT' });
@@ -190,7 +192,7 @@ describe('StateMachine', () => {
 
   it('should handle guards correctly', () => {
     const machine = createTestMachineWithGuards();
-    const actor = machine.createActor();
+    const actor = new Actor<TestContext, TestEvents, TestState>(machine);
 
     // First increment should work (0 -> 1)
     actor.send({ type: 'INCREMENT' });

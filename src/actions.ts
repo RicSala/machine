@@ -1,14 +1,18 @@
-import { Action } from './types';
+import { Action, ActionArgs, MachineContext } from './types';
 
 import { EventObject } from './types';
 
 // actions.ts
-export function assign<TContext, TEvent extends EventObject>(
+export function assign<
+  TContext extends MachineContext,
+  TEvent extends EventObject,
+  TStateValue extends string
+>(
   assignment: (context: TContext, event: TEvent) => Partial<TContext>
-): Action<TContext, TEvent> {
+): Action<TContext, TEvent, TStateValue> {
   return {
     type: 'xstate.assign',
-    exec: ({ context, event }: { context: TContext; event: TEvent }) => {
+    exec: ({ context, event }: ActionArgs<TContext, TEvent, TStateValue>) => {
       return assignment(context, event);
     },
   };

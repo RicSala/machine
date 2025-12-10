@@ -3,10 +3,9 @@ import {
   MachineContext,
   EventObject,
   ActorRef,
-  StateValue,
   Snapshot,
-  ActionExecutor,
   TransitionResult,
+  Action,
 } from './types';
 
 /**
@@ -16,27 +15,45 @@ import {
  * - Manages subscriptions and notifications
  * - Makes sure events are processed in order
  */
-export class Actor<TContext extends MachineContext, TEvent extends EventObject>
-  implements ActorRef<TContext, TEvent>
+export class Actor<
+  TContext extends MachineContext,
+  TEvent extends EventObject,
+  TStateValue extends string
+> implements ActorRef<TContext, TEvent, TStateValue>
 {
   public readonly id: string;
-  private snapshot: Snapshot<TContext, StateValue>;
-  private machine: StateMachine<TContext, TEvent>;
-  private subscribers: Set<(snapshot: Snapshot<TContext, StateValue>) => void>;
-  private deferredQueue: Array<() => void> = [];
-  private lastSnapshot: Snapshot<TContext, StateValue> | null = null;
+  private snapshot: Snapshot<TContext, TStateValue>;
+  private machine: StateMachine<TContext, TEvent, TStateValue>;
+  private subscribers: Set<(snapshot: Snapshot<TContext, TStateValue>) => void>;
+  private lastSnapshot: Snapshot<TContext, TStateValue> | null = null;
 
   constructor(
-    machine: StateMachine<TContext, TEvent>,
+    machine: StateMachine<TContext, TEvent, TStateValue>,
     id: string = crypto.randomUUID()
   ) {
     this.id = id;
     this.machine = machine;
     this.snapshot = machine.getInitialSnapshot();
     this.subscribers = new Set();
+
+    // check initial state entry actions
+    const initialState =
+      this.machine.config.states[this.machine.config.initial];
+    if (initialState.entry) {
+      const actions = Array.isArray(initialState.entry)
+        ? initialState.entry
+        : [initialState.entry];
+      actions.forEach((action: Action<TContext, TEvent, TStateValue>) => {
+        action.exec({
+          context: this.machine.config.context,
+          event: { type: '$init' } as TEvent,
+          self: this,
+        });
+      });
+    }
   }
 
-  getSnapshot = (): Snapshot<TContext, StateValue> => {
+  getSnapshot = (): Snapshot<TContext, TStateValue> => {
     if (this.lastSnapshot !== null) {
       return this.lastSnapshot;
     }
@@ -70,7 +87,7 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
   }
 
   subscribe = (
-    callback: (snapshot: Snapshot<TContext, StateValue>) => void
+    callback: (snapshot: Snapshot<TContext, TStateValue>) => void
   ): (() => void) => {
     // Add the subscriber first
     this.subscribers.add(callback);
@@ -83,6 +100,7 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
     }
 
     return () => {
+      // cleanup subscription
       this.subscribers.delete(callback);
     };
   };
@@ -99,8 +117,13 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
 
     try {
       // Get next state and actions (pure computation)
-      const result: TransitionResult<TContext, StateValue> =
-        this.machine.transition(this.snapshot, event);
+      const result:
+        | TransitionResult<TContext, TStateValue, TEvent>
+        | undefined = this.machine.transition(this.snapshot, event);
+
+      if (!result) {
+        return;
+      }
 
       // Execute actions and update context
       const newContext = this.executeActions(result.actions, event);
@@ -109,23 +132,12 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
       this.lastSnapshot = null;
 
       // Update snapshot
-      const nextSnapshot: Snapshot<TContext, StateValue> = {
+      const nextSnapshot: Snapshot<TContext, TStateValue> = {
         status: this.snapshot.status,
         value: result.value,
         context: newContext,
       };
 
-      // Process deferred actions
-      while (this.deferredQueue.length > 0) {
-        const fn = this.deferredQueue.shift();
-        try {
-          fn?.();
-        } catch (error) {
-          console.error('Error processing queued event:', error);
-        }
-      }
-
-      // Update state and notify
       this.snapshot = nextSnapshot;
       this.notify();
     } catch (error) {
@@ -133,12 +145,13 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
     }
   };
 
-  matches = (stateValue: StateValue): boolean => {
+  matches = (stateValue: TStateValue): boolean => {
     return this.snapshot.value === stateValue;
   };
 
   can = (event: TEvent): boolean => {
-    return this.machine.can(this.snapshot.value, event, this.snapshot.context);
+    const transition = this.machine.transition(this.snapshot, event);
+    return !!transition;
   };
 
   start = (): void => {
@@ -168,12 +181,13 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
   };
 
   private executeActions(
-    actions: ActionExecutor<TContext, TEvent>[],
+    actions: Action<TContext, TEvent, TStateValue>[],
     event: TEvent
   ): TContext {
     let context = { ...this.snapshot.context };
 
     actions.forEach((action) => {
+      // assign actions updates the context
       if (action.type === 'xstate.assign') {
         const updates = action.exec({
           context,
@@ -182,11 +196,8 @@ export class Actor<TContext extends MachineContext, TEvent extends EventObject>
         });
         context = { ...context, ...updates };
       } else {
-        action.exec({
-          context,
-          event,
-          self: this,
-        });
+        // other actions just execute
+        action.exec({ context, event, self: this });
       }
     });
 

@@ -5,7 +5,12 @@ pnpm-lock.yaml
 coverage
 .env
 
-# excalidraw
+# my files
 .excalidraw
+.learnings
 
 .cursor
+
+# Claude.md files
+*CLAUDE.md
+*.CLAUDE.md

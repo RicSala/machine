@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { StateMachine } from '../../src/StateMachine';
+import { createMachine, StateMachine } from '../../src/StateMachine';
 import { assign } from '../../src/actions';
 import { MachineConfig } from '../../src/types';
+import { Actor } from '../../src/Actor';
 
 interface TimerContext {
   duration: number;
   elapsed: number;
   interval: number | null;
 }
+
+type TimerState = 'idle' | 'ready' | 'running' | 'paused';
 
 type TimerEvent =
   | { type: 'INITIALIZE'; duration: number }
@@ -26,7 +29,7 @@ describe('Timer Example', () => {
   });
 
   it('should create a timer machine and handle timer events correctly', () => {
-    const timerConfig: MachineConfig<TimerContext, TimerEvent> = {
+    const machine = createMachine({
       id: 'timer',
       initial: 'idle',
       context: {
@@ -40,14 +43,16 @@ describe('Timer Example', () => {
             INITIALIZE: {
               target: 'ready',
               actions: [
-                assign<TimerContext, TimerEvent>((context, event) => {
-                  if (event.type !== 'INITIALIZE') return {};
-                  return {
-                    duration: event.duration,
-                    elapsed: 0,
-                    interval: null,
-                  };
-                }),
+                assign<TimerContext, TimerEvent, TimerState>(
+                  (context, event) => {
+                    if (event.type !== 'INITIALIZE') return {};
+                    return {
+                      duration: event.duration,
+                      elapsed: 0,
+                      interval: null,
+                    };
+                  }
+                ),
               ],
             },
           },
@@ -57,7 +62,7 @@ describe('Timer Example', () => {
             START: {
               target: 'running',
               actions: [
-                assign<TimerContext, TimerEvent>(() => ({
+                assign<TimerContext, TimerEvent, TimerState>(() => ({
                   interval: setInterval(() => {
                     // This will be mocked in tests
                   }, 1000) as unknown as number,
@@ -71,7 +76,7 @@ describe('Timer Example', () => {
             PAUSE: {
               target: 'paused',
               actions: [
-                assign<TimerContext, TimerEvent>((context) => {
+                assign<TimerContext, TimerEvent, TimerState>((context) => {
                   clearInterval(context.interval!);
                   return { interval: null };
                 }),
@@ -79,15 +84,14 @@ describe('Timer Example', () => {
             },
             TICK: {
               actions: [
-                assign<TimerContext, TimerEvent>((context) => ({
+                assign<TimerContext, TimerEvent, TimerState>((context) => ({
                   elapsed: context.elapsed + 1,
                 })),
               ],
               guards: [
                 {
                   type: 'notCompleted',
-                  condition: (context: TimerContext) =>
-                    context.elapsed < context.duration,
+                  condition: (context) => context.elapsed < context.duration,
                 },
               ],
             },
@@ -98,7 +102,7 @@ describe('Timer Example', () => {
             RESUME: {
               target: 'running',
               actions: [
-                assign<TimerContext, TimerEvent>(() => ({
+                assign<TimerContext, TimerEvent, TimerState>(() => ({
                   interval: setInterval(() => {
                     // This will be mocked in tests
                   }, 1000) as unknown as number,
@@ -108,10 +112,9 @@ describe('Timer Example', () => {
           },
         },
       },
-    };
+    });
 
-    const machine = new StateMachine(timerConfig);
-    const actor = machine.createActor();
+    const actor = new Actor<TimerContext, TimerEvent, TimerState>(machine);
 
     // Test initialization
     actor.send({ type: 'INITIALIZE', duration: 60 });
@@ -146,7 +149,7 @@ describe('Timer Example', () => {
   });
 
   it('should not increment elapsed time beyond duration', () => {
-    const timerConfig: MachineConfig<TimerContext, TimerEvent> = {
+    const timerConfig: MachineConfig<TimerContext, TimerEvent, TimerState> = {
       id: 'timer',
       initial: 'idle',
       context: {
@@ -160,14 +163,16 @@ describe('Timer Example', () => {
             INITIALIZE: {
               target: 'ready',
               actions: [
-                assign<TimerContext, TimerEvent>((context, event) => {
-                  if (event.type !== 'INITIALIZE') return {};
-                  return {
-                    duration: event.duration,
-                    elapsed: 0,
-                    interval: null,
-                  };
-                }),
+                assign<TimerContext, TimerEvent, TimerState>(
+                  (context, event) => {
+                    if (event.type !== 'INITIALIZE') return {};
+                    return {
+                      duration: event.duration,
+                      elapsed: 0,
+                      interval: null,
+                    };
+                  }
+                ),
               ],
             },
           },
@@ -177,7 +182,7 @@ describe('Timer Example', () => {
             START: {
               target: 'running',
               actions: [
-                assign<TimerContext, TimerEvent>(() => ({
+                assign<TimerContext, TimerEvent, TimerState>(() => ({
                   interval: setInterval(() => {
                     // This will be mocked in tests
                   }, 1000) as unknown as number,
@@ -190,7 +195,7 @@ describe('Timer Example', () => {
           on: {
             TICK: {
               actions: [
-                assign<TimerContext, TimerEvent>((context) => ({
+                assign<TimerContext, TimerEvent, TimerState>((context) => ({
                   elapsed: context.elapsed + 1,
                 })),
               ],
@@ -204,11 +209,18 @@ describe('Timer Example', () => {
             },
           },
         },
+        paused: {
+          on: {
+            RESUME: {
+              target: 'running',
+            },
+          },
+        },
       },
     };
 
     const machine = new StateMachine(timerConfig);
-    const actor = machine.createActor();
+    const actor = new Actor<TimerContext, TimerEvent, TimerState>(machine);
 
     // Initialize with 2 seconds duration
     actor.send({ type: 'INITIALIZE', duration: 2 });
