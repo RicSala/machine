@@ -150,7 +150,8 @@ describe('StateMachine', () => {
             {
               type: 'logEntry',
               exec: () => {
-                sideEffects.push('entered idle');
+                console.log('entered active');
+                sideEffects.push('entered active');
               },
             },
           ],
@@ -158,13 +159,20 @@ describe('StateMachine', () => {
             {
               type: 'logExit',
               exec: () => {
-                sideEffects.push('exited idle');
+                console.log('exited active');
+                sideEffects.push('exited active');
               },
             },
           ],
           on: {
             INCREMENT: {
               target: 'active',
+              reenter: true,
+              actions: [
+                assign((context) => ({
+                  count: context.count + 1,
+                })),
+              ],
             },
           },
         },
@@ -176,12 +184,12 @@ describe('StateMachine', () => {
     );
     actor.start();
     console.log('STATUS:', actor.getSnapshot().status);
-    expect(sideEffects).toEqual(['entered idle']);
+    expect(sideEffects).toEqual(['entered active']);
 
     actor.send({ type: 'INCREMENT' });
     expect(sideEffects).toEqual([
-      'entered idle',
-      'exited idle',
+      'entered active',
+      'exited active',
       'entered active',
     ]);
   });

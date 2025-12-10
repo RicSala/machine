@@ -48,7 +48,7 @@ export interface TransitionConfig<
 > {
   target?: NoInfer<TStateValue>;
   guards?: Guard<TContext, TEvent>[];
-  actions?: Action<TContext, TEvent, any>[];
+  actions?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
   reenter?: boolean;
 }
 
@@ -60,8 +60,8 @@ export interface StateNodeConfig<
   on?: {
     [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TStateValue>;
   };
-  entry?: Action<TContext, TEvent, any>[];
-  exit?: Action<TContext, TEvent, any>[];
+  entry?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
+  exit?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
 }
 
 export interface MachineConfig<

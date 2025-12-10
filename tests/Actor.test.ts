@@ -27,7 +27,9 @@ const createTestMachine = () => {
             actions: [
               {
                 type: 'xstate.assign',
-                exec: ({ context }) => ({ value: context.value + 1 }),
+                exec: ({ context, event, self }) => ({
+                  value: context.value + 1,
+                }),
               },
             ],
           },

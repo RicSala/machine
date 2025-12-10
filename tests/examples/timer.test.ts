@@ -60,9 +60,35 @@ describe('Timer Example', () => {
                     interval: null,
                   };
                 }),
+                {
+                  type: 'xstate.assign',
+                  exec: ({ context, event, self }) => {
+                    if (event.type !== 'INITIALIZE') return {};
+                    self.matches('idle');
+                    return {
+                      duration: event.duration,
+                      interval: null,
+                    };
+                  },
+                },
               ],
             },
           },
+          entry: [
+            assign((_context, _event) => ({
+              elapsed: 0,
+            })),
+            {
+              type: 'xstate.assign',
+              exec: ({ context, event, self }) => {
+                if (event.type !== 'INITIALIZE') return {};
+                return {
+                  duration: event.duration,
+                  interval: null,
+                };
+              },
+            },
+          ],
         },
         ready: {
           on: {

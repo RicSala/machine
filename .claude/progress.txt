@@ -1,0 +1,153 @@
+# TypeScript Type Inference Progress
+
+This document explains the type system decisions made for @tinystack/machine, a lightweight state machine library inspired by XState v5.
+
+## The Core Problem
+
+The `assign()` helper function creates actions that update context. The challenge: how do we get proper type inference for `context`, `event`, and `self` inside `assign()` callbacks without requiring users to explicitly type everything?
+
+```typescript
+// We want this to "just work" - context and event should be typed
+assign((context, event) => ({ count: context.count + 1 }))
+```
+
+## Why Type Inference Fails
+
+When `assign()` is called, it's evaluated BEFORE the machine config. TypeScript processes inner expressions first:
+
+```typescript
+const machine = createMachine({
+  context: { count: 0 },           // TContext could be inferred from here
+  states: {
+    idle: {
+      on: {
+        INC: {
+          actions: [
+            assign((ctx) => ...)   // But this is evaluated FIRST - no context yet!
+          ]
+        }
+      }
+    }
+  }
+})
+```
+
+There's no "data flow connection" between `assign()` and the machine config at the time `assign()` is called.
+
+## Solution: The `setup()` Pattern
+
+Following XState v5's approach, we use a `setup()` function that pre-fixes TContext and TEvent:
+
+```typescript
+const timerSetup = setup({
+  types: {} as {
+    context: TimerContext;
+    events: TimerEvent;
+  },
+});
+
+// Now assign knows the types!
+timerSetup.createMachine({
+  context: { count: 0 },
+  states: {
+    idle: {
+      on: {
+        INC: {
+          actions: [
+            timerSetup.assign((ctx) => ({ count: ctx.count + 1 }))  // ctx is typed!
+          ]
+        }
+      }
+    }
+  }
+});
+```
+
+Why this works:
+- `setup()` captures TContext and TEvent as fixed types (not generics to infer)
+- `createMachine()` only needs to infer TState from the `states` object keys
+- Fewer generics = cleaner inference = better contextual typing for nested expressions
+
+## Key Type System Decisions
+
+### 1. NoInfer on `target`
+
+Without `NoInfer`, TypeScript infers TState from BOTH:
+- The keys of the `states` object (correct)
+- The `target` property values (incorrect - these are just references)
+
+```typescript
+// types.ts
+target?: NoInfer<TStateValue>;  // Validated against TState, but doesn't affect inference
+```
+
+### 2. NoInfer on Action Arrays
+
+The `assign()` function returns `Action<TContext, TEvent, any>` because it can't know TState.
+
+Problem: If we use `Action<..., TStateValue>[]` for the actions array, TypeScript tries to unify `any` with `TStateValue`, which widens/breaks inference.
+
+Solution: Use `NoInfer` to prevent actions from affecting TState inference:
+
+```typescript
+// types.ts
+actions?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
+entry?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
+exit?: Action<TContext, TEvent, NoInfer<TStateValue>>[];
+```
+
+This way:
+- TState is inferred ONLY from `states` keys
+- Actions don't participate in inference
+- But `self` in action callbacks still gets the correct TState type (not `any`)
+
+### 3. Simplified setup() Function
+
+Instead of verbose interface definitions:
+
+```typescript
+// BEFORE - verbose
+interface SetupTypes<TContext, TEvent> { ... }
+interface SetupResult<TContext, TEvent> { ... }
+export const setup = (...): SetupResult<...> => { ... }
+```
+
+We let TypeScript infer the return type:
+
+```typescript
+// AFTER - clean
+export function setup<TContext, TEvent>(_options: {
+  types: { context?: TContext; events?: TEvent }
+}) {
+  return {
+    createMachine<TState extends string>(config: { ... }) {
+      return new StateMachine(config);
+    },
+    assign(fn: (context: TContext, event: TEvent) => Partial<TContext>) {
+      return { type: 'xstate.assign', exec: ({ context, event }) => fn(context, event) };
+    },
+  };
+}
+```
+
+## Files Modified
+
+- `src/types.ts`: Added `NoInfer` to `target`, `actions`, `entry`, `exit`
+- `src/StateMachine.ts`: Implemented `setup()` function, simplified types
+- `src/actions.ts`: Standalone `assign()` returns `Action<..., any>` for compatibility
+
+## Trade-offs Accepted
+
+1. Users must declare types in `setup()` - unavoidable, TypeScript can't infer event payload types from string keys like `'INC'`
+
+2. Standalone `assign()` from `actions.ts` works but has weaker typing - use `setup().assign()` for full type safety
+
+## Testing
+
+The timer example in `tests/examples/timer.test.ts` demonstrates the pattern. Run:
+- `pnpm tsc --noEmit` - Type checking
+- `pnpm test` - Runtime tests
+
+## Key Insight
+
+TypeScript's type inference has a "budget" - too many generics competing for inference causes contextual typing to break down. By pre-fixing TContext and TEvent via `setup()`, we simplify the inference problem and enable proper contextual typing throughout.

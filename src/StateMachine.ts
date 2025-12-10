@@ -21,28 +21,31 @@ export class StateMachine<
 > {
   constructor(readonly config: MachineConfig<TContext, TEvent, TStateValue>) {}
 
-  private getTransition(state: TStateValue, event: TEvent, context: TContext) {
+  private getTransitionConfig(
+    state: TStateValue,
+    event: TEvent,
+    context: TContext
+  ) {
     const stateNode = this.config.states[state];
+    let trasitionConfig =
+      stateNode.on?.[event.type as keyof typeof stateNode.on];
 
-    const guards =
-      stateNode.on?.[event.type as keyof typeof stateNode.on]?.guards;
+    const guards = trasitionConfig?.guards;
     const blockingGuards =
       guards?.some((guard) => !guard.condition(context, event)) ?? false;
     if (blockingGuards) return;
 
-    let transition = stateNode.on?.[event.type as keyof typeof stateNode.on];
-    if (transition === undefined) {
-      transition = this.config.on?.[
-        event.type as keyof typeof this.config.on
-      ] as TransitionConfig<TContext, TEvent, TStateValue>;
+    if (trasitionConfig === undefined) {
+      trasitionConfig =
+        this.config.on?.[event.type as keyof typeof this.config.on];
     }
-    return transition;
+    return trasitionConfig;
   }
 
   getInitialSnapshot(): Snapshot<TContext, TStateValue> {
     return {
       status: 'active',
-      context: { ...this.config.context } as TContext,
+      context: { ...this.config.context },
       value: this.config.initial,
     };
   }
@@ -56,7 +59,7 @@ export class StateMachine<
     event: TEvent
   ): TransitionResult<TContext, TStateValue, TEvent> | undefined {
     const currentState = snapshot.value;
-    const transition = this.getTransition(
+    const transition = this.getTransitionConfig(
       currentState,
       event,
       snapshot.context
@@ -69,7 +72,7 @@ export class StateMachine<
     const actions: Action<TContext, TEvent, TStateValue>[] = [];
 
     // Collect exit actions
-    if (targetState !== currentState) {
+    if (targetState !== currentState || transition.reenter) {
       const currentStateNode = this.config.states[currentState];
       if (currentStateNode?.exit) {
         const exitActions = Array.isArray(currentStateNode.exit)
@@ -88,7 +91,7 @@ export class StateMachine<
     }
 
     // Collect entry actions
-    if (targetState !== currentState) {
+    if (targetState !== currentState || transition.reenter) {
       const targetStateNode = this.config.states[targetState];
       if (targetStateNode?.entry) {
         const entryActions = Array.isArray(targetStateNode.entry)
@@ -105,57 +108,12 @@ export class StateMachine<
   }
 }
 
-export const createMachine = <
-  TContext extends MachineContext,
-  TEvent extends EventObject,
-  TState extends string
->(
-  config: Omit<
-    MachineConfig<TContext, TEvent, string>,
-    'states' | 'initial'
-  > & {
-    states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
-    initial: NoInfer<TState>;
-  }
-): StateMachine<TContext, TEvent, TState> => {
-  return new StateMachine(config as MachineConfig<TContext, TEvent, TState>);
-};
-
-interface SetupTypes<
+export function setup<
   TContext extends MachineContext,
   TEvent extends EventObject
-> {
-  context?: TContext;
-  events?: TEvent;
-}
-
-interface SetupResult<
-  TContext extends MachineContext,
-  TEvent extends EventObject
-> {
-  createMachine: <TState extends string>(config: {
-    id: string;
-    context: TContext;
-    initial: NoInfer<TState>;
-    on?: {
-      [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TState>;
-    };
-    states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
-  }) => StateMachine<TContext, TEvent, TState>;
-
-  assign: (
-    assignment: (context: TContext, event: TEvent) => Partial<TContext>
-  ) => Action<TContext, TEvent, any>;
-}
-
-export const setup = <
-  TContext extends MachineContext,
-  TEvent extends EventObject
->(_options: {
-  types: SetupTypes<TContext, TEvent>;
-}): SetupResult<TContext, TEvent> => {
+>(_options: { types: { context?: TContext; events?: TEvent } }) {
   return {
-    createMachine: <TState extends string>(config: {
+    createMachine<TState extends string>(config: {
       id: string;
       context: TContext;
       initial: NoInfer<TState>;
@@ -163,19 +121,19 @@ export const setup = <
         [K in TEvent['type']]?: TransitionConfig<TContext, TEvent, TState>;
       };
       states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
-    }): StateMachine<TContext, TEvent, TState> => {
+    }) {
       return new StateMachine(
         config as MachineConfig<TContext, TEvent, TState>
       );
     },
 
-    assign: (
-      assignment: (context: TContext, event: TEvent) => Partial<TContext>
-    ): Action<TContext, TEvent, any> => {
+    assign(
+      fn: (context: TContext, event: TEvent) => Partial<TContext>
+    ): Action<TContext, TEvent, any> {
       return {
         type: 'xstate.assign',
-        exec: ({ context, event }) => assignment(context, event),
+        exec: ({ context, event }) => fn(context, event),
       };
     },
   };
-};
+}
