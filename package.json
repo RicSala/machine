@@ -25,6 +25,9 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@vitest/ui": "^3.2.4",
