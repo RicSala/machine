@@ -8,7 +8,7 @@ export function assign<
   TEvent extends EventObject,
   TStateValue extends string
 >(
-  assignment: (context: TContext, event: TEvent) => Partial<TContext>
+  assignment: (context: TContext, event: TEvent) => Partial<NoInfer<TContext>>
 ): Action<TContext, TEvent, TStateValue> {
   return {
     type: 'xstate.assign',

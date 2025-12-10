@@ -43,16 +43,13 @@ describe('Timer Example', () => {
             INITIALIZE: {
               target: 'ready',
               actions: [
-                assign<TimerContext, TimerEvent, TimerState>(
-                  (context, event) => {
-                    if (event.type !== 'INITIALIZE') return {};
-                    return {
-                      duration: event.duration,
-                      elapsed: 0,
-                      interval: null,
-                    };
-                  }
-                ),
+                assign((context, event) => {
+                  if (event.type !== 'INITIALIZE') return {};
+                  return {
+                    duration: event.duration,
+                    interval: null,
+                  };
+                }),
               ],
             },
           },
@@ -62,7 +59,7 @@ describe('Timer Example', () => {
             START: {
               target: 'running',
               actions: [
-                assign<TimerContext, TimerEvent, TimerState>(() => ({
+                assign((context) => ({
                   interval: setInterval(() => {
                     // This will be mocked in tests
                   }, 1000) as unknown as number,
@@ -76,7 +73,7 @@ describe('Timer Example', () => {
             PAUSE: {
               target: 'paused',
               actions: [
-                assign<TimerContext, TimerEvent, TimerState>((context) => {
+                assign((context) => {
                   clearInterval(context.interval!);
                   return { interval: null };
                 }),
@@ -84,9 +81,12 @@ describe('Timer Example', () => {
             },
             TICK: {
               actions: [
-                assign<TimerContext, TimerEvent, TimerState>((context) => ({
-                  elapsed: context.elapsed + 1,
-                })),
+                {
+                  type: 'xstate.assign',
+                  exec: ({ context }) => ({
+                    elapsed: context.elapsed + 1,
+                  }),
+                },
               ],
               guards: [
                 {
@@ -102,10 +102,8 @@ describe('Timer Example', () => {
             RESUME: {
               target: 'running',
               actions: [
-                assign<TimerContext, TimerEvent, TimerState>(() => ({
-                  interval: setInterval(() => {
-                    // This will be mocked in tests
-                  }, 1000) as unknown as number,
+                assign((context) => ({
+                  interval: setInterval(() => {}, 1000) as unknown as number,
                 })),
               ],
             },
@@ -114,7 +112,7 @@ describe('Timer Example', () => {
       },
     });
 
-    const actor = new Actor<TimerContext, TimerEvent, TimerState>(machine);
+    const actor = new Actor(machine);
 
     // Test initialization
     actor.send({ type: 'INITIALIZE', duration: 60 });

@@ -4,6 +4,13 @@ export type EventObject<TType extends string = string> = {
 };
 export type MachineContext = Record<string, any>;
 
+/**
+ * Prevents TypeScript from inferring a type from this position.
+ * Use when you want a type to be validated but not used as an inference source.
+ * Built-in from TS 5.4, this is a polyfill for earlier versions.
+ */
+export type NoInfer<T> = [T][T extends any ? 0 : never];
+
 // MACHINE TYPES
 export interface Guard<
   TContext extends MachineContext,

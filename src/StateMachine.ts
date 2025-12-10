@@ -1,4 +1,10 @@
-import { Action, TransitionConfig, TransitionResult } from './types';
+import {
+  Action,
+  StateNodeConfig,
+  TransitionConfig,
+  TransitionResult,
+  NoInfer,
+} from './types';
 
 import { MachineContext, EventObject, MachineConfig, Snapshot } from './types';
 
@@ -102,10 +108,15 @@ export class StateMachine<
 export const createMachine = <
   TContext extends MachineContext,
   TEvent extends EventObject,
-  TState extends string,
-  TConfig extends MachineConfig<TContext, TEvent, TState>
+  TState extends string
 >(
-  config: TConfig & { states: Record<TState, any> } // Forces inference from states
-): StateMachine<TContext, TEvent, keyof TConfig['states'] & string> => {
-  return new StateMachine(config as any);
+  config: Omit<
+    MachineConfig<TContext, TEvent, string>,
+    'states' | 'initial'
+  > & {
+    states: Record<TState, StateNodeConfig<TContext, TEvent, TState>>;
+    initial: NoInfer<TState>;  // Validated against TState, but doesn't participate in inference
+  }
+): StateMachine<TContext, TEvent, TState> => {
+  return new StateMachine(config as MachineConfig<TContext, TEvent, TState>);
 };
