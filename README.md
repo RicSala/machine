@@ -2,6 +2,8 @@
 
 A lightweight, educational implementation of finite state machines in TypeScript, inspired by XState v5. This library is designed to help developers understand the core principles of state machines while providing a stepping stone towards using XState in production.
 
+**~1KB gzipped** - Tiny footprint, full state machine functionality.
+
 ## Why This Library?
 
 While XState is an incredibly powerful state management solution, its extensive feature set can be overwhelming when you're just getting started with state machines. This library:

@@ -106,7 +106,6 @@ export class Actor<
   };
 
   send = (event: TEvent): void => {
-    console.log('sending event', event);
     if (this.snapshot.status !== 'active') {
       if (process.env.NODE_ENV === 'development') {
         console.warn(
@@ -116,7 +115,6 @@ export class Actor<
       return;
     }
 
-    console.log('transitioning');
     try {
       // Get next state and actions (pure computation)
       const result:
@@ -129,8 +127,6 @@ export class Actor<
 
       // Execute actions and update context
       const newContext = this.executeActions(result.actions, event);
-
-      console.log('newContext', newContext);
 
       // Invalidate cache before updating snapshot
       this.lastSnapshot = null;
