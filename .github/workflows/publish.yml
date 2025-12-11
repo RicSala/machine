@@ -10,27 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # Required for Trusted Publishing
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Debug - verify lockfile
+        run: ls -la pnpm-lock.yaml
 
-      - uses: actions/setup-node@v4
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm tsc
+      - name: Type check
+        run: pnpm tsc
 
-      - run: pnpm test
+      - name: Run tests
+        run: pnpm test
 
-      - run: pnpm build
+      - name: Build
+        run: pnpm build
 
-      - run: pnpm publish --provenance --access public --no-git-checks
+      - name: Publish
+        run: pnpm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
