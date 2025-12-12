@@ -7,4 +7,6 @@ export type {
   Action,
   ActorRef,
   Snapshot,
+  TransitionConfig,
+  MachineContext,
 } from './types';

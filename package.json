@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --minify",
+    "build:watch": "tsup src/index.ts --format cjs,esm --dts --watch",
     "test": "vitest run",
     "test:types": "vitest --typecheck.only --run",
     "test:ui": "vitest --ui",

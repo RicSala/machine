@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { StateMachine } from '../src/StateMachine';
+import { setup } from '../src/StateMachine';
 import { Actor } from '../src/Actor';
 import type { MachineConfig, EventObject } from '../src/types';
 
@@ -38,7 +38,9 @@ const createTestMachine = () => {
     },
   };
 
-  return new StateMachine(config);
+  return setup({
+    types: {} as { context: TestContext; events: TestEvents },
+  }).createMachine(config);
 };
 
 describe('Actor', () => {
